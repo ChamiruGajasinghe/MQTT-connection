@@ -861,16 +861,21 @@
             LED2_STATUS: 'esp32/led2/status',
             LED4: 'esp32/led4/control',
             LED4_STATUS: 'esp32/led4/status',
+            // --- Sensor Data ---
             VOLTAGE: 'esp32/sensor/voltage',
-            CURRENT: 'esp32/sensor/current',
+            CURRENT: 'esp32/sensor/current',  // Already existed
+            POWER: 'esp32/sensor/power',      // <--- NEW: 5V Power
             VOLTAGE2: 'esp32/sensor2/voltage',
-            CURRENT2: 'esp32/sensor2/current',
+            CURRENT2: 'esp32/sensor2/current', // Already existed
+            POWER2: 'esp32/sensor2/power',     // <--- NEW: 12V Power
+            // -------------------
             POWERCUT: 'esp32/powercut/status',
             COMMAND: 'esp32/command/status',
             EMERGENCY: 'esp32/emergency/control',
             EMERGENCY_STATUS: 'esp32/emergency/status',
             HISTORY: 'esp32/history/powercut',
-            LIGHT_INTENSITY: 'esp32/light/intensity'
+            LIGHT_INTENSITY: 'esp32/light/intensity',
+            BATTERY_PCT: 'esp32/sensor/battery_pct',
         };
 
         let mqttClient;
@@ -1293,16 +1298,39 @@
                 case TOPICS.STATUS:
                     updateLEDStatus(message);
                     break;
+                // --- 5V System (Backup) ---
                 case TOPICS.VOLTAGE:
                     const backupV = parseFloat(message);
                     document.getElementById('backupVoltage').textContent = backupV.toFixed(2);
-                    updateChart(backupV, parseFloat(document.getElementById('mainVoltage').textContent));
-                    updatePower('backup');
+                    // Update chart
+                    const mainVForChart = parseFloat(document.getElementById('mainVoltage').textContent) || 0;
+                    updateChart(backupV, mainVForChart);
                     
-                    // Low voltage warning (below 4.5V)
+                    // Low voltage warning logic
                     if (backupV < 4.5 && backupV > 0) {
                         showLowVoltageWarning(backupV);
                     }
+                    break;
+
+                case TOPICS.CURRENT:
+                    document.getElementById('backupCurrent').textContent = parseFloat(message).toFixed(2);
+                    break;
+
+                case TOPICS.POWER:
+                    document.getElementById('backupPower').textContent = parseFloat(message).toFixed(2);
+                    break;
+
+                // --- 12V System (Main) ---
+                case TOPICS.VOLTAGE2:
+                    document.getElementById('mainVoltage').textContent = parseFloat(message).toFixed(2);
+                    break;
+
+                case TOPICS.CURRENT2:
+                    document.getElementById('mainCurrent').textContent = parseFloat(message).toFixed(2);
+                    break;
+
+                case TOPICS.POWER2:
+                    document.getElementById('mainPower').textContent = parseFloat(message).toFixed(2);
                     break;
                 case TOPICS.CURRENT:
                     document.getElementById('backupCurrent').textContent = parseFloat(message).toFixed(2);
@@ -1513,17 +1541,6 @@
             }
         }
 
-        function updatePower(type) {
-            if (type === 'main') {
-                const voltage = parseFloat(document.getElementById('mainVoltage').textContent);
-                const current = parseFloat(document.getElementById('mainCurrent').textContent);
-                document.getElementById('mainPower').textContent = (voltage * current).toFixed(2);
-            } else {
-                const voltage = parseFloat(document.getElementById('backupVoltage').textContent);
-                const current = parseFloat(document.getElementById('backupCurrent').textContent);
-                document.getElementById('backupPower').textContent = (voltage * current).toFixed(2);
-            }
-        }
 
         function addLog(message, type = 'info') {
             const log = document.getElementById('commandLog');
