@@ -1,0 +1,1659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Light Intensity & Power Backup System</title>
+    
+    <!-- External Libraries -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
+    
+    <style>
+        :root {
+            --primary-blue: #4A90E2;
+            --primary-green: #50C878;
+            --primary-yellow: #FFD700;
+            --primary-red: #FF6B6B;
+            --bg-light: #F5F7FA;
+            --bg-dark: #1A1D2E;
+            --card-light: #FFFFFF;
+            --card-dark: #252B42;
+            --text-light: #2C3E50;
+            --text-dark: #ECF0F1;
+            --sidebar-light: #FFFFFF;
+            --sidebar-dark: #16213E;
+            --shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-dark);
+            transition: var(--transition);
+            overflow-x: hidden;
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--primary-blue), #667eea);
+            color: white;
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .header-icon {
+            font-size: 2rem;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        .header-title h1 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .header-subtitle {
+            font-size: 0.85rem;
+            opacity: 0.9;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .connection-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+        }
+
+        .connection-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--primary-green);
+            animation: blink 1.5s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .theme-toggle {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 0.6rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: var(--transition);
+        }
+
+        .theme-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        /* Main Layout */
+        .container {
+            display: grid;
+            grid-template-columns: 250px 1fr;
+            min-height: calc(100vh - 80px);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            background: var(--sidebar-dark);
+            padding: 2rem 0;
+            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.05);
+            transition: var(--transition);
+        }
+
+        .sidebar-nav {
+            list-style: none;
+        }
+
+        .sidebar-nav li {
+            margin: 0.5rem 0;
+        }
+
+        .sidebar-nav a {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 2rem;
+            color: var(--text-dark);
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .sidebar-nav a:hover,
+        .sidebar-nav a.active {
+            background: linear-gradient(90deg, var(--primary-blue), transparent);
+            border-left: 4px solid var(--primary-blue);
+        }
+
+        .sidebar-nav i {
+            font-size: 1.2rem;
+            width: 24px;
+        }
+
+        /* Main Content */
+        .main-content {
+            padding: 2rem;
+            overflow-y: auto;
+        }
+
+        /* Dashboard Grid */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        /* Card Styles */
+        .card {
+            background: var(--card-dark);
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .card-icon {
+            font-size: 1.5rem;
+        }
+
+        /* Status Cards */
+        .status-card {
+            text-align: center;
+        }
+
+        .status-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 1rem 0;
+        }
+
+        .status-label {
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+        }
+
+        .status-on {
+            background: var(--primary-green);
+            box-shadow: 0 0 10px var(--primary-green);
+        }
+
+        .status-off {
+            background: var(--primary-red);
+            box-shadow: 0 0 10px var(--primary-red);
+        }
+
+        .status-warning {
+            background: var(--primary-yellow);
+            box-shadow: 0 0 10px var(--primary-yellow);
+        }
+
+        /* Gauge */
+        .gauge-container {
+            position: relative;
+            width: 200px;
+            height: 200px;
+            margin: 1rem auto;
+        }
+
+        .gauge {
+            width: 100%;
+            height: 100%;
+        }
+
+        .gauge-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .gauge-number {
+            font-size: 2rem;
+            font-weight: 700;
+        }
+
+        .gauge-unit {
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+
+        /* Chart Container */
+        .chart-container {
+            height: 300px;
+            position: relative;
+        }
+        
+        /* Average Box */
+        .chart-average-box {
+            position: absolute;
+            bottom: -20px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            border-radius: 6px;
+            padding: 5px 8px;
+            font-size: 10px;
+            font-weight: 600;
+            color: #ECF0F1;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+        }
+        
+        .chart-average-label {
+            font-size: 8px;
+            opacity: 0.8;
+            margin-bottom: 1px;
+        }
+        
+        .chart-average-value {
+            font-size: 11px;
+            font-weight: bold;
+        }
+
+        /* Control Buttons */
+        .control-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .control-btn {
+            padding: 1rem;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-blue), #667eea);
+            color: white;
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, var(--primary-green), #45B849);
+            color: white;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--primary-red), #E85D75);
+            color: white;
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, var(--primary-yellow), #FFA500);
+            color: white;
+        }
+
+        .control-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .control-btn:active {
+            transform: scale(0.98);
+        }
+
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 30px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.4s;
+            border-radius: 30px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 22px;
+            width: 22px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.4s;
+            border-radius: 50%;
+        }
+
+        input:checked + .toggle-slider {
+            background: linear-gradient(135deg, var(--primary-green), #45B849);
+        }
+
+        input:checked + .toggle-slider:before {
+            transform: translateX(30px);
+        }
+
+        /* Command Log */
+        .command-log {
+            background: #1A1D2E;
+            border-radius: 10px;
+            padding: 1rem;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+        }
+
+        .log-entry {
+            padding: 0.5rem;
+            margin: 0.3rem 0;
+            border-left: 3px solid var(--primary-blue);
+            background: rgba(74, 144, 226, 0.1);
+            border-radius: 5px;
+            font-size: 0.85rem;
+            animation: slideIn 0.3s ease;
+        }
+
+        .log-entry.warning {
+            border-left-color: var(--primary-yellow);
+            background: rgba(255, 215, 0, 0.1);
+        }
+
+        .log-entry.error {
+            border-left-color: var(--primary-red);
+            background: rgba(255, 107, 107, 0.1);
+        }
+
+        .log-entry.success {
+            border-left-color: var(--primary-green);
+            background: rgba(80, 200, 120, 0.1);
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .log-timestamp {
+            color: #888;
+            margin-right: 0.5rem;
+        }
+
+        .log-message {
+            color: #ECF0F1;
+        }
+
+        /* Battery Icon */
+        .battery-icon {
+            position: relative;
+            display: inline-block;
+            width: 60px;
+            height: 30px;
+            border: 3px solid currentColor;
+            border-radius: 5px;
+            margin: 1rem auto;
+        }
+
+        .battery-level {
+            position: absolute;
+            left: 0;
+            top: 0;
+            height: 100%;
+            background: currentColor;
+            transition: width 0.5s ease;
+        }
+
+        .battery-tip {
+            position: absolute;
+            right: -8px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 5px;
+            height: 15px;
+            background: currentColor;
+            border-radius: 0 3px 3px 0;
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+
+            .sidebar {
+                display: none;
+            }
+
+            .header-title h1 {
+                font-size: 1.2rem;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+            }
+
+            .header-right {
+                gap: 0.5rem;
+            }
+
+            .connection-badge {
+                font-size: 0.75rem;
+                padding: 0.4rem 0.8rem;
+            }
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Power Alert */
+        .power-alert {
+            padding: 1rem;
+            border-radius: 10px;
+            margin: 1rem 0;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            animation: pulse-alert 1.5s infinite;
+        }
+
+        .power-alert.normal {
+            background: rgba(80, 200, 120, 0.1);
+            border-left: 4px solid var(--primary-green);
+        }
+
+        .power-alert.warning {
+            background: rgba(255, 215, 0, 0.1);
+            border-left: 4px solid var(--primary-yellow);
+        }
+
+        .power-alert.danger {
+            background: rgba(255, 107, 107, 0.1);
+            border-left: 4px solid var(--primary-red);
+        }
+
+        @keyframes pulse-alert {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <div class="header-icon">
+                <i class="fas fa-lightbulb"></i>
+                <i class="fas fa-battery-three-quarters"></i>
+            </div>
+            <div class="header-title">
+                <h1 class="text-red-500">Advanced Light Intensity Monitor & Power Backup System</h1>
+                <div class="header-subtitle">Real-time IoT Monitoring Dashboard</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <div class="connection-badge">
+                <span class="connection-dot"></span>
+                <span id="connectionStatus">Connecting...</span>
+            </div>
+            <button class="theme-toggle" onclick="testAlert()" title="Test Alert System">
+                <i class="fas fa-bell"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <nav>
+                <ul class="sidebar-nav">
+                    <li><a href="dashboard.html" class="active"><i class="fas fa-tachometer-alt"></i> Dashboard</a></li>
+                    <li><a href="#"><i class="fas fa-chart-line"></i> Analytics</a></li>
+                    <li><a href="#"><i class="fas fa-cog"></i> Power Settings</a></li>
+                    <li><a href="#"><i class="fas fa-bell"></i> Alerts</a></li>
+                    <li><a href="history.html"><i class="fas fa-history"></i> History</a></li>
+                    <li><a href="#"><i class="fas fa-download"></i> Export Data</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Power Alert -->
+            <div id="powerAlert" class="power-alert normal">
+                <i class="fas fa-plug" style="font-size: 1.5rem;"></i>
+                <div>
+                    <strong id="powerAlertTitle">Power Status Normal</strong>
+                    <div id="powerAlertText">Main power supply operating normally</div>
+                </div>
+            </div>
+
+            <!-- Dashboard Grid -->
+            <div class="dashboard-grid">
+                <!-- Light Intensity Gauge -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-sun card-icon" style="color: var(--primary-yellow);"></i>
+                            Light Intensity
+                        </div>
+                    </div>
+                    <div class="gauge-container">
+                        <canvas id="lightGauge" class="gauge"></canvas>
+                        <div class="gauge-value">
+                            <div class="gauge-number" id="lightValue">0</div>
+                            <div class="gauge-unit">%</div>
+                        </div>
+                    </div>
+                    <div class="status-label" style="text-align: center;">Current Reading</div>
+                </div>
+
+                <!-- System Status -->
+                <div class="card status-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-toggle-on card-icon" style="color: var(--primary-blue);"></i>
+                            System Status
+                        </div>
+                    </div>
+                    <div>
+                        <span class="status-indicator" id="systemIndicator"></span>
+                        <span id="systemStatus">OFF</span>
+                    </div>
+                    <div class="status-value" id="systemValue">System</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="systemToggle" onchange="toggleSystem()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <!-- Intensity Control -->
+                <div class="card status-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-adjust card-icon" style="color: var(--primary-yellow);"></i>
+                            Average Intensity
+                        </div>
+                    </div>
+                    <div>
+                        <span class="status-indicator" id="intensityIndicator"></span>
+                        <span id="intensityStatus">OFF</span>
+                    </div>
+                    <div class="status-value">Control</div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="intensityToggle" onchange="toggleIntensity()">
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <!-- Main Power Status -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-bolt card-icon" style="color: var(--primary-green);"></i>
+                            Main Power
+                        </div>
+                    </div>
+                    <div class="status-value" style="color: var(--primary-green);">
+                        <span id="mainVoltage">0.00</span> V
+                    </div>
+                    <div class="status-label">
+                        <i class="fas fa-plug-circle-bolt"></i> <span id="mainCurrent">0.00</span> mA
+                    </div>
+                    <div class="status-label">
+                        <i class="fas fa-fire"></i> <span id="mainPower">0.00</span> mW
+                    </div>
+                </div>
+
+                <!-- Battery Backup -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-battery-three-quarters card-icon" style="color: var(--primary-blue);"></i>
+                            5v system
+                        </div>
+                    </div>
+                    <div class="status-value" style="color: var(--primary-blue);">
+                        <span id="backupVoltage">0.00</span> V
+                    </div>
+                    <div class="status-label">
+                        <i class="fas fa-bolt-lightning"></i> <span id="backupCurrent">0.00</span> mA
+                    </div>
+                    <div class="status-label">
+                        <i class="fas fa-fire"></i> <span id="backupPower">0.00</span> mW
+                    </div>
+                </div>
+
+                <!-- LED Control -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-lightbulb card-icon" style="color: var(--primary-yellow);"></i>
+                            LED Control
+                        </div>
+                    </div>
+                    <div style="text-align: center; margin: 1rem 0;">
+                        <span class="status-indicator" id="ledIndicator"></span>
+                        <span id="ledStatus">OFF</span>
+                    </div>
+                    <div class="control-buttons">
+                        <button class="control-btn btn-success" onclick="turnOn()" id="btnOn">
+                            <i class="fas fa-power-off"></i> ON
+                        </button>
+                        <button class="control-btn btn-danger" onclick="turnOff()" id="btnOff">
+                            <i class="fas fa-power-off"></i> OFF
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Emergency Light Control (GPIO27) -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-exclamation-triangle card-icon" style="color: var(--primary-red);"></i>
+                            Emergency Light (GPIO27)
+                        </div>
+                    </div>
+                    <div style="text-align: center; margin: 1rem 0;">
+                        <span class="status-indicator" id="emergencyIndicator"></span>
+                        <span id="emergencyStatus">AUTO</span>
+                    </div>
+                    <div class="control-buttons">
+                        <button class="control-btn btn-success" onclick="emergencyOn()" id="btnEmergencyOn">
+                            <i class="fas fa-lightbulb"></i> ON
+                        </button>
+                        <button class="control-btn btn-danger" onclick="emergencyOff()" id="btnEmergencyOff">
+                            <i class="fas fa-lightbulb-slash"></i> OFF
+                        </button>
+                        <button class="control-btn btn-warning" onclick="emergencyAuto()" id="btnEmergencyAuto">
+                            <i class="fas fa-sync-alt"></i> AUTO
+                        </button>
+                    </div>
+                    <div style="text-align: center; margin-top: 0.5rem; font-size: 0.85rem; opacity: 0.7;">
+                        Manual override for power backup light
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chart Section -->
+            <!-- Real-time Monitoring Charts -->
+            <div style="margin-top: 2rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem;">
+                <!-- 5v System Chart -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-battery-three-quarters card-icon" style="color: var(--primary-blue);"></i>
+                            5v System - Real-time
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="channel1Chart"></canvas>
+                        <div class="chart-average-box">
+                            <div class="chart-average-label">1-Min Avg</div>
+                            <div class="chart-average-value" id="channel1Average">0.00V</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Main Power Chart -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-plug card-icon" style="color: var(--primary-green);"></i>
+                            Main Power - Real-time
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="channel2Chart"></canvas>
+                        <div class="chart-average-box">
+                            <div class="chart-average-label">1-Min Avg</div>
+                            <div class="chart-average-value" id="channel2Average">0.00V</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Command Log -->
+            <div class="card" style="margin-top: 2rem;">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fas fa-terminal card-icon" style="color: var(--primary-green);"></i>
+                        Command Status Log
+                    </div>
+                </div>
+                <div class="command-log" id="commandLog">
+                    <div class="log-entry">
+                        <span class="log-timestamp">[System]</span>
+                        <span class="log-message">Dashboard initialized. Connecting to MQTT broker...</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // MQTT Configuration
+        const MQTT_BROKER = 'wss://broker.hivemq.com:8884/mqtt';
+        const TOPICS = {
+            CONTROL: 'esp32/led/control',
+            STATUS: 'esp32/led/status',
+            LED2: 'esp32/led2/control',
+            LED2_STATUS: 'esp32/led2/status',
+            LED4: 'esp32/led4/control',
+            LED4_STATUS: 'esp32/led4/status',
+            VOLTAGE: 'esp32/sensor/voltage',
+            CURRENT: 'esp32/sensor/current',
+            VOLTAGE2: 'esp32/sensor2/voltage',
+            CURRENT2: 'esp32/sensor2/current',
+            POWERCUT: 'esp32/powercut/status',
+            COMMAND: 'esp32/command/status',
+            EMERGENCY: 'esp32/emergency/control',
+            EMERGENCY_STATUS: 'esp32/emergency/status',
+            HISTORY: 'esp32/history/powercut',
+            LIGHT_INTENSITY: 'esp32/light/intensity'
+        };
+
+        let mqttClient;
+        let channel1Chart;
+        let channel2Chart;
+        let chartData = {
+            voltage1: [],
+            voltage2: [],
+            labels: []
+        };
+        let dataPointIndex = 0; // Track current position in the 60-slot array
+        
+        // Create alert sound using Web Audio API
+        function playAlertSound() {
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (e) {
+                console.log('Audio play failed:', e);
+            }
+        }
+        
+        // Request notification permission on first user interaction
+        function requestNotificationPermission() {
+            if ('Notification' in window) {
+                console.log('Current notification permission:', Notification.permission);
+                if (Notification.permission === 'default') {
+                    console.log('Requesting notification permission...');
+                    Notification.requestPermission().then(permission => {
+                        console.log('Notification permission result:', permission);
+                        if (permission === 'granted') {
+                            console.log('Creating confirmation notification...');
+                            try {
+                                const notification = new Notification('✓ Notifications Enabled', {
+                                    body: 'You will receive alerts for power cuts and system events',
+                                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="20" font-size="20">✓</text></svg>'
+                                });
+                                notification.onclick = function() {
+                                    window.focus();
+                                    this.close();
+                                };
+                                console.log('Confirmation notification created successfully');
+                            } catch (e) {
+                                console.error('Failed to create confirmation notification:', e);
+                            }
+                        } else {
+                            console.log('Notification permission denied or dismissed');
+                        }
+                    }).catch(err => {
+                        console.error('Error requesting notification permission:', err);
+                    });
+                } else if (Notification.permission === 'granted') {
+                    console.log('Notifications already granted');
+                } else {
+                    console.log('Notifications are blocked');
+                }
+            } else {
+                console.log('Notification API not supported');
+            }
+        }
+
+        // Custom plugin to show latest value label
+        const latestValuePlugin = {
+            id: 'latestValueLabel',
+            afterDatasetsDraw(chart) {
+                const ctx = chart.ctx;
+                const dataset = chart.data.datasets[0];
+                const meta = chart.getDatasetMeta(0);
+                
+                // Find the last non-null data point
+                let lastIndex = -1;
+                for (let i = dataset.data.length - 1; i >= 0; i--) {
+                    if (dataset.data[i] !== null) {
+                        lastIndex = i;
+                        break;
+                    }
+                }
+                
+                if (lastIndex >= 0) {
+                    const point = meta.data[lastIndex];
+                    const value = dataset.data[lastIndex];
+                    
+                    if (point) {
+                        const x = point.x;
+                        const y = point.y;
+                        
+                        // Draw text only
+                        ctx.save();
+                        ctx.fillStyle = dataset.borderColor;
+                        ctx.font = 'bold 11px Segoe UI';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'bottom';
+                        const text = value.toFixed(2) + 'V';
+                        ctx.fillText(text, x, y - 5);
+                        ctx.restore();
+                    }
+                }
+            }
+        };
+
+        // Initialize Charts
+        function initChart() {
+            // Pre-populate with 60 empty slots
+            const emptyLabels = Array(60).fill('');
+            const emptyData = Array(60).fill(null);
+            
+            // Channel 1 Chart (5v System)
+            const ctx1 = document.getElementById('channel1Chart').getContext('2d');
+            channel1Chart = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: [...emptyLabels],
+                    datasets: [{
+                        label: 'Voltage (V)',
+                        data: [...emptyData],
+                        borderColor: 'rgb(74, 144, 226)',
+                        backgroundColor: 'rgba(74, 144, 226, 0.2)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 5,
+                        spanGaps: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Voltage (V)',
+                                color: '#ECF0F1',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: '#ECF0F1'
+                            }
+                        },
+                        x: {
+                            type: 'category',
+                            min: 0,
+                            max: 59,
+                            title: {
+                                display: true,
+                                text: 'Time',
+                                color: '#ECF0F1',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: '#ECF0F1',
+                                autoSkip: true,
+                                maxTicksLimit: 10
+                            }
+                        }
+                    }
+                },
+                plugins: [latestValuePlugin]
+            });
+            
+            // Channel 2 Chart (Main Power)
+            const ctx2 = document.getElementById('channel2Chart').getContext('2d');
+            channel2Chart = new Chart(ctx2, {
+                type: 'line',
+                data: {
+                    labels: [...emptyLabels],
+                    datasets: [{
+                        label: 'Voltage (V)',
+                        data: [...emptyData],
+                        borderColor: 'rgb(80, 200, 120)',
+                        backgroundColor: 'rgba(80, 200, 120, 0.2)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 5,
+                        spanGaps: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Voltage (V)',
+                                color: '#ECF0F1',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: '#ECF0F1'
+                            }
+                        },
+                        x: {
+                            type: 'category',
+                            min: 0,
+                            max: 59,
+                            title: {
+                                display: true,
+                                text: 'Time',
+                                color: '#ECF0F1',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: '#ECF0F1',
+                                autoSkip: true,
+                                maxTicksLimit: 10
+                            }
+                        }
+                    }
+                },
+                plugins: [latestValuePlugin]
+            });
+        }
+
+        // Update Chart Data
+        function updateChart(voltage1, voltage2) {
+            const now = new Date().toLocaleTimeString();
+            
+            if (dataPointIndex < 60) {
+                // Fill slots from left to right (0 to 59)
+                channel1Chart.data.labels[dataPointIndex] = now;
+                channel1Chart.data.datasets[0].data[dataPointIndex] = voltage1;
+                
+                channel2Chart.data.labels[dataPointIndex] = now;
+                channel2Chart.data.datasets[0].data[dataPointIndex] = voltage2;
+                
+                dataPointIndex++;
+            } else {
+                // Once full, shift data (scroll from right to left)
+                channel1Chart.data.labels.shift();
+                channel1Chart.data.labels.push(now);
+                channel1Chart.data.datasets[0].data.shift();
+                channel1Chart.data.datasets[0].data.push(voltage1);
+                
+                channel2Chart.data.labels.shift();
+                channel2Chart.data.labels.push(now);
+                channel2Chart.data.datasets[0].data.shift();
+                channel2Chart.data.datasets[0].data.push(voltage2);
+            }
+            
+            // Calculate and update moving averages
+            updateMovingAverage('channel1Average', channel1Chart.data.datasets[0].data);
+            updateMovingAverage('channel2Average', channel2Chart.data.datasets[0].data);
+            
+            // Save to localStorage
+            saveChartData();
+            
+            channel1Chart.update('none');
+            channel2Chart.update('none');
+        }
+        
+        // Calculate moving average for non-null values
+        function updateMovingAverage(elementId, dataArray) {
+            const validData = dataArray.filter(val => val !== null);
+            if (validData.length > 0) {
+                const sum = validData.reduce((a, b) => a + b, 0);
+                const avg = sum / validData.length;
+                document.getElementById(elementId).textContent = avg.toFixed(2) + 'V';
+            }
+        }
+        
+        // Save chart data to localStorage
+        function saveChartData() {
+            const chartState = {
+                channel1Labels: channel1Chart.data.labels,
+                channel1Data: channel1Chart.data.datasets[0].data,
+                channel2Labels: channel2Chart.data.labels,
+                channel2Data: channel2Chart.data.datasets[0].data,
+                dataPointIndex: dataPointIndex,
+                timestamp: Date.now()
+            };
+            localStorage.setItem('dashboardChartData', JSON.stringify(chartState));
+        }
+        
+        // Load chart data from localStorage
+        function loadChartData() {
+            const saved = localStorage.getItem('dashboardChartData');
+            if (saved) {
+                try {
+                    const chartState = JSON.parse(saved);
+                    // Only restore if data is less than 5 minutes old
+                    if (Date.now() - chartState.timestamp < 300000) {
+                        channel1Chart.data.labels = chartState.channel1Labels;
+                        channel1Chart.data.datasets[0].data = chartState.channel1Data;
+                        channel2Chart.data.labels = chartState.channel2Labels;
+                        channel2Chart.data.datasets[0].data = chartState.channel2Data;
+                        dataPointIndex = chartState.dataPointIndex;
+                        
+                        // Update averages
+                        updateMovingAverage('channel1Average', channel1Chart.data.datasets[0].data);
+                        updateMovingAverage('channel2Average', channel2Chart.data.datasets[0].data);
+                        
+                        channel1Chart.update();
+                        channel2Chart.update();
+                    }
+                } catch (e) {
+                    console.error('Error loading chart data:', e);
+                }
+            }
+        }
+
+
+        
+        // Test Alert System
+        function testAlert() {
+            // Request permission first if needed
+            if ('Notification' in window) {
+                if (Notification.permission === 'default') {
+                    Notification.requestPermission().then(permission => {
+                        console.log('Notification permission:', permission);
+                        if (permission === 'granted') {
+                            playAlertSound();
+                            new Notification('🔔 Alert Test', {
+                                body: 'Alert system is working correctly!',
+                                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="20" font-size="20">🔔</text></svg>'
+                            });
+                        } else {
+                            alert('Please allow notifications in your browser settings.');
+                        }
+                    });
+                } else if (Notification.permission === 'granted') {
+                    playAlertSound();
+                    new Notification('🔔 Alert Test', {
+                        body: 'Alert system is working correctly!',
+                        icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="20" font-size="20">🔔</text></svg>'
+                    });
+                } else {
+                    alert('Notifications are blocked. Please enable them in your browser settings:\n\n1. Click the lock icon in address bar\n2. Find Notifications\n3. Set to "Allow"');
+                }
+            } else {
+                alert('This browser does not support notifications.');
+            }
+        }
+
+        // MQTT Functions
+        function initMQTT() {
+            updateConnectionStatus('Connecting...');
+            
+            mqttClient = mqtt.connect(MQTT_BROKER, {
+                clientId: 'Dashboard_' + Math.random().toString(16).substr(2, 8),
+                clean: true,
+                reconnectPeriod: 1000
+            });
+
+            mqttClient.on('connect', function() {
+                console.log('Connected to MQTT broker');
+                updateConnectionStatus('Connected');
+                
+                // Request notification permission after successful connection
+                requestNotificationPermission();
+                
+                // Subscribe to all topics
+                Object.values(TOPICS).forEach(topic => {
+                    mqttClient.subscribe(topic, (err) => {
+                        if (!err) console.log('Subscribed to:', topic);
+                    });
+                });
+
+                addLog('Connected to MQTT broker successfully', 'success');
+            });
+
+            mqttClient.on('message', function(topic, message) {
+                const msg = message.toString();
+                console.log('Received:', topic, msg);
+                handleMessage(topic, msg);
+            });
+
+            mqttClient.on('error', function(error) {
+                console.error('MQTT Error:', error);
+                updateConnectionStatus('Disconnected');
+            });
+
+            mqttClient.on('offline', function() {
+                updateConnectionStatus('Offline');
+            });
+        }
+
+        function handleMessage(topic, message) {
+            switch(topic) {
+                case TOPICS.STATUS:
+                    updateLEDStatus(message);
+                    break;
+                case TOPICS.VOLTAGE:
+                    const backupV = parseFloat(message);
+                    document.getElementById('backupVoltage').textContent = backupV.toFixed(2);
+                    updateChart(backupV, parseFloat(document.getElementById('mainVoltage').textContent));
+                    updatePower('backup');
+                    
+                    // Low voltage warning (below 4.5V)
+                    if (backupV < 4.5 && backupV > 0) {
+                        showLowVoltageWarning(backupV);
+                    }
+                    break;
+                case TOPICS.CURRENT:
+                    document.getElementById('backupCurrent').textContent = parseFloat(message).toFixed(2);
+                    updatePower('backup');
+                    break;
+                case TOPICS.VOLTAGE2:
+                    document.getElementById('mainVoltage').textContent = parseFloat(message).toFixed(2);
+                    updatePower('main');
+                    break;
+                case TOPICS.CURRENT2:
+                    document.getElementById('mainCurrent').textContent = parseFloat(message).toFixed(2);
+                    updatePower('main');
+                    break;
+                case TOPICS.LED2_STATUS:
+                    updateSystemStatus(message);
+                    break;
+                case TOPICS.LED4_STATUS:
+                    updateIntensityStatus(message);
+                    break;
+                case TOPICS.POWERCUT:
+                    updatePowerAlert(message);
+                    break;
+                case TOPICS.COMMAND:
+                    if (message === 'CLEAR_LOG') {
+                        document.getElementById('commandLog').innerHTML = '';
+                    } else {
+                        addLog(message);
+                    }
+                    break;
+                case TOPICS.EMERGENCY_STATUS:
+                    updateEmergencyStatus(message);
+                    break;
+                case TOPICS.HISTORY:
+                    saveHistoryEvent(message);
+                    break;
+                case TOPICS.LIGHT_INTENSITY:
+                    updateLightIntensity(message);
+                    break;
+            }
+        }
+
+        // Save power cut history to localStorage
+        function saveHistoryEvent(message) {
+            try {
+                const data = JSON.parse(message);
+                const event = {
+                    timestamp: new Date().toLocaleString(),
+                    duration: data.duration,
+                    startV: data.startV,
+                    endV: data.endV,
+                    drop: data.drop,
+                    energy: data.energy
+                };
+                
+                // Load existing history
+                let powerCutHistory = [];
+                const saved = localStorage.getItem('powerCutHistory');
+                if (saved) {
+                    powerCutHistory = JSON.parse(saved);
+                }
+                
+                // Add new event
+                powerCutHistory.push(event);
+                
+                // Save back to localStorage
+                localStorage.setItem('powerCutHistory', JSON.stringify(powerCutHistory));
+                
+                console.log('Power cut event saved to history:', event);
+            } catch (e) {
+                console.error('Error saving history event:', e);
+            }
+        }
+
+        function updateConnectionStatus(status) {
+            document.getElementById('connectionStatus').textContent = status;
+        }
+
+        function updateLEDStatus(status) {
+            const indicator = document.getElementById('ledIndicator');
+            const statusText = document.getElementById('ledStatus');
+            
+            if (status === 'ON') {
+                indicator.className = 'status-indicator status-on';
+                statusText.textContent = 'ON';
+            } else {
+                indicator.className = 'status-indicator status-off';
+                statusText.textContent = 'OFF';
+            }
+        }
+
+        function updateSystemStatus(status) {
+            const indicator = document.getElementById('systemIndicator');
+            const statusText = document.getElementById('systemStatus');
+            const toggle = document.getElementById('systemToggle');
+            
+            if (status === 'ON') {
+                indicator.className = 'status-indicator status-on';
+                statusText.textContent = 'ACTIVE';
+                toggle.checked = true;
+            } else {
+                indicator.className = 'status-indicator status-off';
+                statusText.textContent = 'INACTIVE';
+                toggle.checked = false;
+            }
+        }
+
+        function updateIntensityStatus(status) {
+            const indicator = document.getElementById('intensityIndicator');
+            const statusText = document.getElementById('intensityStatus');
+            const toggle = document.getElementById('intensityToggle');
+            
+            if (status === 'ON') {
+                indicator.className = 'status-indicator status-on';
+                statusText.textContent = 'ACTIVE';
+                toggle.checked = true;
+            } else {
+                indicator.className = 'status-indicator status-off';
+                statusText.textContent = 'INACTIVE';
+                toggle.checked = false;
+            }
+        }
+        function updateLightIntensity(message) {
+            const percentage = parseFloat(message);
+            document.getElementById('lightValue').textContent = percentage.toFixed(0);
+            console.log('Light Intensity updated:', percentage + '%');
+        }
+
+
+
+        function updatePowerAlert(status) {
+            const alert = document.getElementById('powerAlert');
+            const title = document.getElementById('powerAlertTitle');
+            const text = document.getElementById('powerAlertText');
+            
+            console.log('updatePowerAlert called with status:', status);
+            console.log('Notification permission:', Notification.permission);
+            
+            if (status === 'POWER_CUT') {
+                alert.className = 'power-alert danger';
+                title.textContent = '⚠️ POWER CUT DETECTED!';
+                text.textContent = 'Main power below 9V. Emergency backup activated.';
+                
+                // Play alert sound
+                playAlertSound();
+                
+                // Show browser notification
+                if ('Notification' in window) {
+                    console.log('Notification API available');
+                    if (Notification.permission === 'granted') {
+                        console.log('Creating power cut notification...');
+                        try {
+                            const notification = new Notification('⚠️ POWER CUT DETECTED!', {
+                                body: 'Main power below 9V. Emergency backup activated.',
+                                icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="20" font-size="20">⚡</text></svg>',
+                                requireInteraction: true,
+                                tag: 'power-cut'
+                            });
+                            notification.onclick = function() {
+                                window.focus();
+                                this.close();
+                            };
+                            console.log('Notification created successfully');
+                        } catch (e) {
+                            console.error('Failed to create notification:', e);
+                        }
+                    } else {
+                        console.log('Notification permission not granted:', Notification.permission);
+                    }
+                }
+            } else {
+                alert.className = 'power-alert normal';
+                title.textContent = 'Power Status Normal';
+                text.textContent = 'Main power supply operating normally';
+                
+                // Show restoration notification
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    console.log('Creating power restored notification...');
+                    try {
+                        const notification = new Notification('✓ Power Restored', {
+                            body: 'Main power supply operating normally',
+                            icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="20" font-size="20">✓</text></svg>',
+                            tag: 'power-restored'
+                        });
+                        notification.onclick = function() {
+                            window.focus();
+                            this.close();
+                        };
+                        console.log('Power restored notification created');
+                    } catch (e) {
+                        console.error('Failed to create notification:', e);
+                    }
+                }
+            }
+        }
+
+        let lastLowVoltageAlert = 0;
+        function showLowVoltageWarning(voltage) {
+            const now = Date.now();
+            // Throttle alerts to once per minute
+            if (now - lastLowVoltageAlert < 60000) return;
+            lastLowVoltageAlert = now;
+            
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('⚠️ Low Battery Voltage', {
+                    body: `Battery voltage is ${voltage.toFixed(2)}V. Please check the system.`,
+                    icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="20" font-size="20">🔋</text></svg>'
+                });
+            }
+        }
+
+        function updatePower(type) {
+            if (type === 'main') {
+                const voltage = parseFloat(document.getElementById('mainVoltage').textContent);
+                const current = parseFloat(document.getElementById('mainCurrent').textContent);
+                document.getElementById('mainPower').textContent = (voltage * current).toFixed(2);
+            } else {
+                const voltage = parseFloat(document.getElementById('backupVoltage').textContent);
+                const current = parseFloat(document.getElementById('backupCurrent').textContent);
+                document.getElementById('backupPower').textContent = (voltage * current).toFixed(2);
+            }
+        }
+
+        function addLog(message, type = 'info') {
+            const log = document.getElementById('commandLog');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry ' + type;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            entry.innerHTML = `
+                <span class="log-timestamp">[${timestamp}]</span>
+                <span class="log-message">${message}</span>
+            `;
+            
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+            
+            // Keep only last 50 entries
+            while (log.children.length > 50) {
+                log.removeChild(log.firstChild);
+            }
+            
+            // Send notification for important log messages (disabled for status commands)
+            // sendLogNotification(message, type);
+        }
+        
+        // Send notification for log messages
+        function sendLogNotification(message, type) {
+            // Skip connection success message and clear log messages
+            if (message.includes('Connected to MQTT') || message === 'CLEAR_LOG') {
+                return;
+            }
+            
+            if ('Notification' in window && Notification.permission === 'granted') {
+                let icon = '📋';
+                let title = 'System Event';
+                
+                // Customize notification based on message type
+                if (type === 'success') {
+                    icon = '✓';
+                    title = 'Success';
+                } else if (type === 'warning' || message.includes('⚠️') || message.includes('POWER CUT')) {
+                    icon = '⚠️';
+                    title = 'Warning';
+                    playAlertSound();
+                } else if (type === 'error' || message.includes('🔴')) {
+                    icon = '🔴';
+                    title = 'Alert';
+                    playAlertSound();
+                }
+                
+                try {
+                    const notification = new Notification(`${icon} ${title}`, {
+                        body: message.replace(/[⚠️✓🔴]/g, '').trim(),
+                        icon: `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><text y="20" font-size="20">${icon}</text></svg>`,
+                        tag: 'command-log-' + Date.now()
+                    });
+                    notification.onclick = function() {
+                        window.focus();
+                        this.close();
+                    };
+                    console.log('Log notification sent:', message);
+                } catch (e) {
+                    console.error('Failed to send log notification:', e);
+                }
+            }
+        }
+
+        // Control Functions
+        function toggleSystem() {
+            const toggle = document.getElementById('systemToggle');
+            mqttClient.publish(TOPICS.LED2, toggle.checked ? 'ON' : 'OFF');
+            console.log('Published: System', toggle.checked ? 'ON' : 'OFF');
+        }
+
+        function toggleIntensity() {
+            const toggle = document.getElementById('intensityToggle');
+            mqttClient.publish(TOPICS.LED4, toggle.checked ? 'ON' : 'OFF');
+            console.log('Published: Intensity', toggle.checked ? 'ON' : 'OFF');
+        }
+
+        function turnOn() {
+            mqttClient.publish(TOPICS.CONTROL, 'ON');
+            console.log('Published: LED ON');
+        }
+
+        function turnOff() {
+            mqttClient.publish(TOPICS.CONTROL, 'OFF');
+            console.log('Published: LED OFF');
+        }
+
+        function emergencyOn() {
+            mqttClient.publish(TOPICS.EMERGENCY, 'ON');
+            console.log('Published: Emergency Light ON');
+            addLog('Emergency Light turned ON manually', 'warning');
+        }
+
+        function emergencyOff() {
+            mqttClient.publish(TOPICS.EMERGENCY, 'OFF');
+            console.log('Published: Emergency Light OFF');
+            addLog('Emergency Light turned OFF manually', 'info');
+        }
+
+        function emergencyAuto() {
+            mqttClient.publish(TOPICS.EMERGENCY, 'AUTO');
+            console.log('Published: Emergency Light AUTO mode');
+            addLog('Emergency Light returned to AUTO mode', 'success');
+        }
+
+        function updateEmergencyStatus(status) {
+            const indicator = document.getElementById('emergencyIndicator');
+            const statusText = document.getElementById('emergencyStatus');
+            
+            if (status === 'ON') {
+                indicator.className = 'status-indicator status-on';
+                statusText.textContent = 'ON (Manual)';
+                statusText.style.color = 'var(--primary-green)';
+            } else if (status === 'OFF') {
+                indicator.className = 'status-indicator status-off';
+                statusText.textContent = 'OFF (Manual)';
+                statusText.style.color = 'var(--primary-red)';
+            } else {
+                indicator.className = 'status-indicator status-warning';
+                statusText.textContent = 'AUTO';
+                statusText.style.color = 'var(--primary-yellow)';
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('load', function() {
+            initChart();
+            loadChartData();
+            initMQTT();
+        });
+    </script>
+</body>
+</html>

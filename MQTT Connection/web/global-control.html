@@ -1,0 +1,936 @@
+<!--
+ =====================================================================
+ ADVANCED LIGHT INTENSITY MONITORING & POWER BACKUP SYSTEM
+ =====================================================================
+ 
+ Purpose: Modern IoT dashboard for ESP32-based light monitoring system
+ 
+ Technology Stack:
+ - HTML5 for structure
+ - CSS3 for modern responsive design
+ - JavaScript for MQTT communication and data visualization
+ - MQTT.js library for real-time communication
+ - Chart.js for data visualization
+ 
+ Features:
+ - Real-time light intensity monitoring
+ - Live charts and gauges
+ - Power backup system monitoring
+ - Automatic switching detection
+ - Manual control override
+ - Dark/Light theme toggle
+ - Responsive design for all devices
+ 
+ =====================================================================
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Light Intensity & Power Backup System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- ============================================================= -->
+    <!-- STYLES - Beautiful gradient design with animations           -->
+    <!-- ============================================================= -->
+    <style>
+        /* Reset default browser styles for consistency across browsers */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;  /* Include padding/border in element width/height */
+        }
+        
+        /* Body: Full screen gradient background, centered content */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);  /* Purple gradient */
+            min-height: 100vh;      /* Full viewport height */
+            display: flex;          /* Flexbox for centering */
+            justify-content: center; /* Center horizontally */
+            align-items: center;    /* Center vertically */
+            padding: 20px;          /* Padding for mobile devices */
+        }
+        
+        /* Main container: White card with shadow */
+        .container {
+            background: white;
+            border-radius: 20px;    /* Rounded corners */
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);  /* Shadow for depth */
+            padding: 40px;
+            max-width: 500px;       /* Limit width on large screens */
+            width: 100%;            /* Full width on small screens */
+            text-align: center;
+        }
+        
+        /* Main heading */
+        h1 {
+            background: linear-gradient(135deg, #d4af37 0%, #000000 50%, #d4af37 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+            font-size: 1.5em;
+            font-weight: bold;
+            letter-spacing: 1px;
+        }
+        
+        /* Subtitle text */
+        .subtitle {
+            color: #666;
+            margin-bottom: 20px;
+            font-size: 1.1em;
+        }
+        
+        /* Connection status badge - changes color based on state */
+        .connection-status {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;    /* Pill shape */
+            font-size: 0.9em;
+            margin-bottom: 30px;
+            font-weight: bold;
+        }
+        /* Green badge when connected */
+        .connection-status.connected {
+            background: #4ade80;    /* Green */
+            color: white;
+        }
+        /* Red badge when disconnected */
+        .connection-status.disconnected {
+            background: #ef4444;    /* Red */
+            color: white;
+        }
+        /* Yellow badge when connecting */
+        .connection-status.connecting {
+            background: #fbbf24;    /* Yellow/Orange */
+            color: white;
+        }
+        
+        /* LED indicator circle - glows when ON */
+        .led-indicator {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;     /* Perfect circle */
+            margin: 0 auto 20px;
+            background: #ef4444;    /* Red when OFF */
+            box-shadow: 0 0 40px rgba(239, 68, 68, 0.5);  /* Red glow */
+            transition: all 0.3s ease;  /* Smooth color transition */
+        }
+        /* Green glowing LED when ON */
+        .led-indicator.on {
+            background: #4ade80;    /* Bright green */
+            box-shadow: 0 0 40px rgba(74, 222, 128, 0.8);  /* Stronger green glow */
+        }
+        
+        /* Status text below LED indicator */
+        .status {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin-bottom: 30px;
+            color: #ef4444;         /* Red when OFF */
+        }
+        /* Green text when LED is ON */
+        .status.on {
+            color: #4ade80;
+        }
+        
+        /* Container for control buttons */
+        .button-group {
+            display: flex;          /* Side-by-side layout */
+            gap: 20px;              /* Space between buttons */
+            margin-top: 30px;
+        }
+        
+        /* Button base styles */
+        .btn {
+            flex: 1;                /* Equal width buttons */
+            padding: 20px 30px;
+            font-size: 1.2em;
+            font-weight: bold;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;        /* Hand cursor on hover */
+            transition: all 0.3s ease;  /* Smooth hover effects */
+            color: white;
+            text-transform: uppercase;  /* ALL CAPS text */
+            letter-spacing: 1px;    /* Spacing between letters */
+        }
+        /* Lift button on hover */
+        .btn:hover {
+            transform: translateY(-2px);  /* Move up 2px */
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        }
+        /* Button press animation */
+        .btn:active {
+            transform: translateY(0);  /* Return to normal position */
+        }
+        /* Disabled button styling */
+        .btn:disabled {
+            opacity: 0.5;           /* Semi-transparent */
+            cursor: not-allowed;    /* Not-allowed cursor */
+        }
+        
+        /* ON button - Green background */
+        .btn-on {
+            background: linear-gradient(135deg, #4ade80, #22c55e);  /* Green gradient */
+        }
+        .btn-on:hover {
+            background: linear-gradient(135deg, #22c55e, #16a34a);  /* Darker green */
+        }
+        
+        /* OFF button - Red background */
+        .btn-off {
+            background: linear-gradient(135deg, #ef4444, #dc2626);  /* Red gradient */
+        }
+        .btn-off:hover {
+            background: linear-gradient(135deg, #dc2626, #b91c1c);  /* Darker red */
+        }
+        
+        /* Info box at bottom */
+        .info {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f3f4f6;    /* Light gray background */
+            border-radius: 10px;
+            text-align: left;
+        }
+        .info h3 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        .info p {
+            color: #666;
+            font-size: 0.9em;
+            line-height: 1.6;
+            margin-bottom: 5px;
+        }
+        
+        /* Button pulse indicator */
+        .pulse-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: #fef3c7;
+            border-radius: 10px;
+            border: 2px solid #fbbf24;
+        }
+        .pulse-section h3 {
+            color: #f59e0b;
+            margin-bottom: 10px;
+            font-size: 1.2em;
+        }
+        .pulse-indicator {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            margin: 10px auto;
+            background: #fbbf24;
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+            transition: all 0.3s ease;
+        }
+        .pulse-indicator.active {
+            background: #f59e0b;
+            box-shadow: 0 0 40px rgba(245, 158, 11, 1);
+            transform: scale(1.2);
+        }
+        .pulse-count {
+            font-size: 2em;
+            font-weight: bold;
+            color: #f59e0b;
+            margin-top: 10px;
+        }
+        
+        /* Sensor display section */
+        .sensor-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border-radius: 10px;
+            border: 2px solid #3b82f6;
+        }
+        .sensor-section h3 {
+            color: #1e40af;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+        }
+        .sensor-display {
+            display: flex;
+            justify-content: space-around;
+            gap: 15px;
+        }
+        .sensor-group {
+            background: rgba(255, 255, 255, 0.5);
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        .sensor-group-title {
+            font-size: 0.85em;
+            color: #1e40af;
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-align: center;
+        }
+        .sensor-value {
+            flex: 1;
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .sensor-label {
+            font-size: 0.75em;
+            color: #64748b;
+            margin-bottom: 3px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .sensor-reading {
+            font-size: 1.3em;
+            font-weight: bold;
+            color: #1e40af;
+            font-family: 'Courier New', monospace;
+        }
+        .sensor-unit {
+            font-size: 0.8em;
+            color: #64748b;
+            margin-left: 3px;
+        }
+        
+        /* Power cut alert section */
+        .power-alert {
+            margin-top: 30px;
+            padding: 20px;
+            border-radius: 10px;
+            border: 3px solid;
+            transition: all 0.3s ease;
+        }
+        .power-alert.normal {
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            border-color: #10b981;
+        }
+        .power-alert.warning {
+            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
+            border-color: #ef4444;
+            animation: pulse-alert 1.5s infinite;
+        }
+        @keyframes pulse-alert {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
+        }
+        .power-alert h3 {
+            margin-bottom: 10px;
+            font-size: 1.3em;
+        }
+        .power-alert.normal h3 {
+            color: #065f46;
+        }
+        .power-alert.warning h3 {
+            color: #991b1b;
+        }
+        .power-status-text {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .power-alert.normal .power-status-text {
+            color: #059669;
+        }
+        .power-alert.warning .power-status-text {
+            color: #dc2626;
+        }
+        
+        /* Command status log section */
+        .command-log {
+            margin-top: 20px;
+            padding: 20px;
+            background: #1f2937;
+            border-radius: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .command-log h3 {
+            color: #60a5fa;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        .command-log-content {
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.8;
+        }
+        .command-entry {
+            padding: 8px;
+            margin-bottom: 5px;
+            background: #374151;
+            border-left: 3px solid #60a5fa;
+            border-radius: 4px;
+            color: #e5e7eb;
+            animation: slideIn 0.3s ease;
+        }
+        .command-entry.warning {
+            border-left-color: #f59e0b;
+            background: #451a03;
+            color: #fbbf24;
+        }
+        .command-entry.success {
+            border-left-color: #10b981;
+            color: #6ee7b7;
+        }
+        .command-entry.error {
+            border-left-color: #ef4444;
+            background: #450a0a;
+            color: #fca5a5;
+        }
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        .command-timestamp {
+            color: #9ca3af;
+            font-size: 0.85em;
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- ============================================================= -->
+    <!-- MAIN INTERFACE - Control panel container                     -->
+    <!-- ============================================================= -->
+    <div class="container">
+        <!-- Page title with emoji -->
+        <h1>ADVANCE LIGHT INTENSITY MONITOR AND POWER BACKUP SYSTEM</h1>
+        <p class="subtitle">Control from anywhere in the world</p>
+        
+        <!-- Connection status badge (updated by JavaScript) -->
+        <div class="connection-status connecting" id="connectionStatus">Connecting...</div>
+        
+        <!-- Animated LED indicator (updated by JavaScript) -->
+        <div class="led-indicator" id="ledIndicator"></div>
+        
+        <!-- Status text showing current LED state -->
+        <div class="status" id="ledStatus">LED is OFF</div>
+        
+        <!-- Control buttons -->
+        <div class="button-group">
+            <!-- Turn ON button - calls turnOn() JavaScript function -->
+            <button class="btn btn-on" id="btnOn" onclick="turnOn()" disabled>💡 Turn ON</button>
+            
+            <!-- Turn OFF button - calls turnOff() JavaScript function -->
+            <button class="btn btn-off" id="btnOff" onclick="turnOff()" disabled>🔴 Turn OFF</button>
+        </div>
+        
+        <!-- LED2 Control Section -->
+        <div class="pulse-section">
+            <h3>⚡ System On Off</h3>
+            <button class="btn" id="btnToggle" onclick="toggleSystem()" disabled style="width: 100%; margin: 10px 0; background: linear-gradient(135deg, #ef4444, #dc2626);">🔴 System OFF</button>
+            <p style="color: #92400e; text-align: center; font-size: 0.9em; margin-top: 10px;">Click to toggle system on GPIO13</p>
+        </div>
+        
+        <!-- LED4 Control Section (GPIO14) -->
+        <div class="pulse-section" style="background: #e9d5ff; border: 2px solid #a855f7;">
+            <h3 style="color: #7e22ce;">⚡ Average Intensity</h3>
+            <button class="btn" id="btnToggle14" onclick="toggleIntensity()" disabled style="width: 100%; margin: 10px 0; background: linear-gradient(135deg, #ef4444, #dc2626);">🔴 OFF</button>
+            <p style="color: #581c87; text-align: center; font-size: 0.9em; margin-top: 10px;">Click to toggle intensity on GPIO14</p>
+        </div>
+        
+        <!-- Sensor Display Section -->
+        <div class="sensor-section">
+            <h3>📊 System Info</h3>
+            
+            <!-- 5v system Data -->
+            <div class="sensor-group">
+                <div class="sensor-group-title">5v system</div>
+                <div class="sensor-display">
+                    <div class="sensor-value">
+                        <div class="sensor-label">Voltage</div>
+                        <div class="sensor-reading" id="voltageReading">--.---<span class="sensor-unit">V</span></div>
+                    </div>
+                    <div class="sensor-value">
+                        <div class="sensor-label">Current</div>
+                        <div class="sensor-reading" id="currentReading">---.--<span class="sensor-unit">mA</span></div>
+                    </div>
+                    <div class="sensor-value">
+                        <div class="sensor-label">Power</div>
+                        <div class="sensor-reading" id="powerReading">---.--<span class="sensor-unit">mW</span></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Channel 2 Data (Main Power) -->
+            <div class="sensor-group">
+                <div class="sensor-group-title">Main Power</div>
+                <div class="sensor-display">
+                    <div class="sensor-value">
+                        <div class="sensor-label">Voltage</div>
+                        <div class="sensor-reading" id="voltage2Reading">--.---<span class="sensor-unit">V</span></div>
+                    </div>
+                    <div class="sensor-value">
+                        <div class="sensor-label">Current</div>
+                        <div class="sensor-reading" id="current2Reading">---.--<span class="sensor-unit">mA</span></div>
+                    </div>
+                    <div class="sensor-value">
+                        <div class="sensor-label">Power</div>
+                        <div class="sensor-reading" id="power2Reading">---.--<span class="sensor-unit">mW</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Power Cut Alert Section -->
+        <div class="power-alert normal" id="powerAlert">
+            <h3 id="powerAlertTitle">⚡ Power Status</h3>
+            <div class="power-status-text" id="powerStatusText">✓ Power Normal</div>
+        </div>
+        
+        <!-- Information box -->
+        <div class="info">
+            <h3>📡 How It Works</h3>
+            <p><strong>MQTT Broker:</strong> broker.hivemq.com</p>
+            <p><strong>Control Topic:</strong> esp32/led/control</p>
+            <p><strong>Status Topic:</strong> esp32/led/status</p>
+            <p>This page connects to a public MQTT broker and can control your ESP32 from anywhere in the world!</p>
+            
+            <!-- Command Status Log -->
+            <div class="command-log">
+                <h3>📋 Command Status Log</h3>
+                <div class="command-log-content" id="commandLog">
+                    <div class="command-entry">System ready. Waiting for commands...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ============================================================= -->
+    <!-- MQTT LIBRARY - Load from CDN (Content Delivery Network)       -->
+    <!-- ============================================================= -->
+    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
+    
+    <!-- ============================================================= -->
+    <!-- JAVASCRIPT - MQTT Communication Logic                        -->
+    <!-- ============================================================= -->
+    <script>
+        // =========================================================
+        // MQTT CONFIGURATION
+        // =========================================================
+        const MQTT_BROKER = 'wss://broker.hivemq.com:8884/mqtt';
+        
+        // MQTT Topics
+        const TOPIC_CONTROL = 'esp32/led/control';
+        const TOPIC_STATUS = 'esp32/led/status';
+        const TOPIC_LED2 = 'esp32/led2/control';
+        const TOPIC_LED2_STATUS = 'esp32/led2/status';
+        const TOPIC_LED4 = 'esp32/led4/control';
+        const TOPIC_LED4_STATUS = 'esp32/led4/status';
+        const TOPIC_SENSOR_VOLTAGE = 'esp32/sensor/voltage';
+        const TOPIC_SENSOR_CURRENT = 'esp32/sensor/current';
+        const TOPIC_SENSOR2_VOLTAGE = 'esp32/sensor2/voltage';
+        const TOPIC_SENSOR2_CURRENT = 'esp32/sensor2/current';
+        const TOPIC_POWERCUT = 'esp32/powercut/status';
+        const TOPIC_COMMAND_STATUS = 'esp32/command/status';
+        
+        // Global variables
+        let mqttClient;
+        let currentVoltage = 0;
+        let currentCurrent = 0;
+        let currentVoltage2 = 0;
+        let currentCurrent2 = 0;
+        let systemState = false;
+        let intensityState = false;
+        
+        // =========================================================
+        // FUNCTION: Update Connection Status Badge
+        // =========================================================
+        function updateConnectionStatus(status) {
+            const statusEl = document.getElementById('connectionStatus');
+            statusEl.className = 'connection-status ' + status;
+            
+            if (status === 'connected') {
+                statusEl.textContent = '✓ Connected';
+                document.getElementById('btnOn').disabled = false;
+                document.getElementById('btnOff').disabled = false;
+                document.getElementById('btnToggle').disabled = false;
+                document.getElementById('btnToggle14').disabled = false;
+            } else if (status === 'connecting') {
+                statusEl.textContent = 'Connecting...';
+                document.getElementById('btnOn').disabled = true;
+                document.getElementById('btnOff').disabled = true;
+                document.getElementById('btnToggle').disabled = true;
+                document.getElementById('btnToggle14').disabled = true;
+            } else {
+                statusEl.textContent = '✗ Disconnected';
+                document.getElementById('btnOn').disabled = true;
+                document.getElementById('btnOff').disabled = true;
+                document.getElementById('btnToggle').disabled = true;
+                document.getElementById('btnToggle14').disabled = true;
+            }
+        }
+        
+        // =========================================================
+        // FUNCTION: Update LED Status Display
+        // =========================================================
+        function updateLEDStatus(status) {
+            const indicator = document.getElementById('ledIndicator');
+            const statusText = document.getElementById('ledStatus');
+            
+            if (status === 'ON') {
+                indicator.className = 'led-indicator on';
+                statusText.className = 'status on';
+                statusText.textContent = '✓ LED is ON';
+            } else {
+                indicator.className = 'led-indicator';
+                statusText.className = 'status';
+                statusText.textContent = 'LED is OFF';
+            }
+        }
+        
+        // =========================================================
+        // FUNCTION: Update Voltage Display
+        // =========================================================
+        function updateVoltage(voltage) {
+            currentVoltage = parseFloat(voltage);
+            const voltageEl = document.getElementById('voltageReading');
+            voltageEl.innerHTML = currentVoltage.toFixed(3) + '<span class="sensor-unit">V</span>';
+            updatePower();
+        }
+        
+        // =========================================================
+        // FUNCTION: Update Current Display
+        // =========================================================
+        function updateCurrent(current) {
+            currentCurrent = parseFloat(current);
+            const currentEl = document.getElementById('currentReading');
+            currentEl.innerHTML = currentCurrent.toFixed(2) + '<span class="sensor-unit">mA</span>';
+            updatePower();
+        }
+        
+        // =========================================================
+        // FUNCTION: Update Power Display
+        // =========================================================
+        function updatePower() {
+            const power = currentVoltage * currentCurrent;
+            const powerEl = document.getElementById('powerReading');
+            powerEl.innerHTML = power.toFixed(2) + '<span class="sensor-unit">mW</span>';
+        }
+        
+        // =========================================================
+        // FUNCTION: Update Channel 2 Voltage Display
+        // =========================================================
+        function updateVoltage2(voltage) {
+            currentVoltage2 = parseFloat(voltage);
+            const voltageEl = document.getElementById('voltage2Reading');
+            voltageEl.innerHTML = currentVoltage2.toFixed(3) + '<span class="sensor-unit">V</span>';
+            updatePower2();
+        }
+        
+        // =========================================================
+        // FUNCTION: Update Channel 2 Current Display
+        // =========================================================
+        function updateCurrent2(current) {
+            currentCurrent2 = parseFloat(current);
+            const currentEl = document.getElementById('current2Reading');
+            currentEl.innerHTML = currentCurrent2.toFixed(2) + '<span class="sensor-unit">mA</span>';
+            updatePower2();
+        }
+        
+        // =========================================================
+        // FUNCTION: Update Channel 2 Power Display
+        // =========================================================
+        function updatePower2() {
+            const power = currentVoltage2 * currentCurrent2;
+            const powerEl = document.getElementById('power2Reading');
+            powerEl.innerHTML = power.toFixed(2) + '<span class="sensor-unit">mW</span>';
+        }
+        
+        // =========================================================
+        // FUNCTION: Update Power Cut Status
+        // =========================================================
+        function updatePowerCutStatus(status) {
+            const alertBox = document.getElementById('powerAlert');
+            const title = document.getElementById('powerAlertTitle');
+            const statusText = document.getElementById('powerStatusText');
+            
+            if (status === 'POWER_CUT') {
+                alertBox.className = 'power-alert warning';
+                title.textContent = '⚠️ POWER CUT DETECTED!';
+                statusText.textContent = '⛔ Main Power Below 9V';
+            } else {
+                alertBox.className = 'power-alert normal';
+                title.textContent = '⚡ Power Status';
+                statusText.textContent = '✓ Power Normal';
+            }
+        }
+        
+        // =========================================================
+        // FUNCTION: Add Command Status to Log
+        // =========================================================
+        function addCommandStatus(message) {
+            const logContainer = document.getElementById('commandLog');
+            const timestamp = new Date().toLocaleTimeString();
+            
+            // Determine entry class based on message content
+            let entryClass = 'command-entry';
+            if (message.includes('⚠️') || message.includes('POWER CUT')) {
+                entryClass += ' warning';
+            } else if (message.includes('✓') || message.includes('Step')) {
+                entryClass += ' success';
+            } else if (message.includes('🔴') || message.includes('ERROR')) {
+                entryClass += ' error';
+            }
+            
+            const entry = document.createElement('div');
+            entry.className = entryClass;
+            entry.innerHTML = '<span class="command-timestamp">[' + timestamp + ']</span>' + message;
+            
+            logContainer.appendChild(entry);
+            
+            // Auto-scroll to bottom
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // Keep only last 50 entries
+            while (logContainer.children.length > 50) {
+                logContainer.removeChild(logContainer.firstChild);
+            }
+        }
+        
+        // =========================================================
+        // FUNCTION: Update System Button Status
+        // =========================================================
+        function updateSystemStatus(status) {
+            const btn = document.getElementById('btnToggle');
+            
+            if (status === 'ON') {
+                systemState = true;
+                btn.style.background = 'linear-gradient(135deg, #4ade80, #22c55e)';
+                btn.innerHTML = '✓ System ON';
+            } else {
+                systemState = false;
+                btn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+                btn.innerHTML = '🔴 System OFF';
+            }
+        }
+        
+        // =========================================================
+        // FUNCTION: Update Intensity Button Status
+        // =========================================================
+        function updateIntensityStatus(status) {
+            const btn = document.getElementById('btnToggle14');
+            
+            if (status === 'ON') {
+                intensityState = true;
+                btn.style.background = 'linear-gradient(135deg, #a855f7, #9333ea)';
+                btn.innerHTML = '✓ ON';
+            } else {
+                intensityState = false;
+                btn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+                btn.innerHTML = '🔴 OFF';
+            }
+        }
+        
+        // =========================================================
+        // FUNCTION: Toggle System
+        // =========================================================
+        function toggleSystem() {
+            systemState = !systemState;
+            const btn = document.getElementById('btnToggle');
+            
+            if (systemState) {
+                btn.style.background = 'linear-gradient(135deg, #4ade80, #22c55e)';
+                btn.innerHTML = '✓ System ON';
+                mqttClient.publish(TOPIC_LED2, 'ON');
+                console.log('Published: System ON');
+                
+                // Automatically turn OFF Average Intensity
+                if (intensityState) {
+                    intensityState = false;
+                    const btnIntensity = document.getElementById('btnToggle14');
+                    btnIntensity.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+                    btnIntensity.innerHTML = '🔴 OFF';
+                    mqttClient.publish(TOPIC_LED4, 'OFF');
+                    console.log('Published: Intensity OFF (auto)');
+                }
+            } else {
+                btn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+                btn.innerHTML = '🔴 System OFF';
+                mqttClient.publish(TOPIC_LED2, 'OFF');
+                console.log('Published: System OFF');
+            }
+        }
+        
+        // =========================================================
+        // FUNCTION: Toggle Intensity
+        // =========================================================
+        function toggleIntensity() {
+            intensityState = !intensityState;
+            const btn = document.getElementById('btnToggle14');
+            
+            if (intensityState) {
+                btn.style.background = 'linear-gradient(135deg, #a855f7, #9333ea)';
+                btn.innerHTML = '✓ ON';
+                mqttClient.publish(TOPIC_LED4, 'ON');
+                console.log('Published: Intensity ON');
+            } else {
+                btn.style.background = 'linear-gradient(135deg, #ef4444, #dc2626)';
+                btn.innerHTML = '🔴 OFF';
+                mqttClient.publish(TOPIC_LED4, 'OFF');
+                console.log('Published: Intensity OFF');
+            }
+        }
+        
+        // =========================================================
+        // FUNCTION: Turn LED ON
+        // =========================================================
+        function turnOn() {
+            mqttClient.publish(TOPIC_CONTROL, 'ON');
+            console.log('Published: ON');
+        }
+        
+        // =========================================================
+        // FUNCTION: Turn LED OFF
+        // =========================================================
+        function turnOff() {
+            mqttClient.publish(TOPIC_CONTROL, 'OFF');
+            console.log('Published: OFF');
+        }
+        
+        // =========================================================
+        // FUNCTION: Initialize MQTT Connection
+        // =========================================================
+        function initMQTT() {
+            updateConnectionStatus('connecting');
+            
+            mqttClient = mqtt.connect(MQTT_BROKER, {
+                clientId: 'WebClient_' + Math.random().toString(16).substr(2, 8),
+                clean: true,
+                reconnectPeriod: 1000,
+            });
+            
+            // =====================================================
+            // EVENT: Connection Established
+            // =====================================================
+            mqttClient.on('connect', function() {
+                console.log('Connected to MQTT broker');
+                updateConnectionStatus('connected');
+                
+                // Subscribe to all topics
+                mqttClient.subscribe(TOPIC_STATUS, function(err) {
+                    if (!err) {
+                        console.log('Subscribed to:', TOPIC_STATUS);
+                        mqttClient.publish(TOPIC_CONTROL, 'STATUS');
+                    }
+                });
+                
+                mqttClient.subscribe(TOPIC_SENSOR_VOLTAGE, function(err) {
+                    if (!err) console.log('Subscribed to:', TOPIC_SENSOR_VOLTAGE);
+                });
+                
+                mqttClient.subscribe(TOPIC_SENSOR_CURRENT, function(err) {
+                    if (!err) console.log('Subscribed to:', TOPIC_SENSOR_CURRENT);
+                });
+                
+                mqttClient.subscribe(TOPIC_SENSOR2_VOLTAGE, function(err) {
+                    if (!err) console.log('Subscribed to:', TOPIC_SENSOR2_VOLTAGE);
+                });
+                
+                mqttClient.subscribe(TOPIC_SENSOR2_CURRENT, function(err) {
+                    if (!err) console.log('Subscribed to:', TOPIC_SENSOR2_CURRENT);
+                });
+                
+                mqttClient.subscribe(TOPIC_POWERCUT, function(err) {
+                    if (!err) console.log('Subscribed to:', TOPIC_POWERCUT);
+                });
+                
+                mqttClient.subscribe(TOPIC_COMMAND_STATUS, function(err) {
+                    if (!err) console.log('Subscribed to:', TOPIC_COMMAND_STATUS);
+                });
+                
+                mqttClient.subscribe(TOPIC_LED2_STATUS, function(err) {
+                    if (!err) console.log('Subscribed to:', TOPIC_LED2_STATUS);
+                });
+                
+                mqttClient.subscribe(TOPIC_LED4_STATUS, function(err) {
+                    if (!err) console.log('Subscribed to:', TOPIC_LED4_STATUS);
+                });
+            });
+            
+            // =====================================================
+            // EVENT: Message Received
+            // =====================================================
+            mqttClient.on('message', function(topic, message) {
+                const msg = message.toString();
+                console.log('Received:', topic, msg);
+                
+                if (topic === TOPIC_STATUS) {
+                    updateLEDStatus(msg);
+                }
+                else if (topic === TOPIC_SENSOR_VOLTAGE) {
+                    updateVoltage(msg);
+                }
+                else if (topic === TOPIC_SENSOR_CURRENT) {
+                    updateCurrent(msg);
+                }
+                else if (topic === TOPIC_SENSOR2_VOLTAGE) {
+                    updateVoltage2(msg);
+                }
+                else if (topic === TOPIC_SENSOR2_CURRENT) {
+                    updateCurrent2(msg);
+                }
+                else if (topic === TOPIC_POWERCUT) {
+                    updatePowerCutStatus(msg);
+                }
+                else if (topic === TOPIC_COMMAND_STATUS) {
+                    if (msg === 'CLEAR_LOG') {
+                        // Clear the command log
+                        const logContainer = document.getElementById('commandLog');
+                        logContainer.innerHTML = '';
+                    } else {
+                        addCommandStatus(msg);
+                    }
+                }
+                else if (topic === TOPIC_LED2_STATUS) {
+                    updateSystemStatus(msg);
+                }
+                else if (topic === TOPIC_LED4_STATUS) {
+                    updateIntensityStatus(msg);
+                }
+            });
+            
+            // =====================================================
+            // EVENT: Connection Error
+            // =====================================================
+            mqttClient.on('error', function(error) {
+                console.error('MQTT Error:', error);
+                updateConnectionStatus('disconnected');
+            });
+            
+            // =====================================================
+            // EVENT: Offline
+            // =====================================================
+            mqttClient.on('offline', function() {
+                console.log('MQTT offline');
+                updateConnectionStatus('disconnected');
+            });
+            
+            // =====================================================
+            // EVENT: Reconnecting
+            // =====================================================
+            mqttClient.on('reconnect', function() {
+                console.log('Reconnecting...');
+                updateConnectionStatus('connecting');
+            });
+        }
+        
+        // =========================================================
+        // AUTO-START: Initialize when page loads
+        // =========================================================
+        window.addEventListener('load', initMQTT);
+    </script>
+</body>
+</html>

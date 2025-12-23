@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Power Cut History - Analytics Dashboard</title>
+    
+    <!-- External Libraries -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/mqtt@4.3.7/dist/mqtt.min.js"></script>
+    
+    <style>
+        :root {
+            --primary-blue: #4A90E2;
+            --primary-green: #50C878;
+            --primary-yellow: #FFD700;
+            --primary-red: #FF6B6B;
+            --primary-purple: #9D4EDD;
+            --bg-light: #F5F7FA;
+            --bg-dark: #1A1D2E;
+            --card-light: #FFFFFF;
+            --card-dark: #252B42;
+            --text-light: #2C3E50;
+            --text-dark: #ECF0F1;
+            --shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+            --transition: all 0.3s ease;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-dark);
+            transition: var(--transition);
+        }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, var(--primary-purple), #667eea);
+            color: white;
+            padding: 1.5rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .header-icon {
+            font-size: 2rem;
+        }
+
+        .header-title h1 {
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        .header-subtitle {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .nav-link {
+            color: white;
+            text-decoration: none;
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .theme-toggle {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 0.6rem 1rem;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: var(--transition);
+        }
+
+        .theme-toggle:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Main Content */
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--card-dark);
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            transition: var(--transition);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+
+        .stat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+        }
+
+        .stat-icon {
+            font-size: 2rem;
+            padding: 0.8rem;
+            border-radius: 12px;
+            background: rgba(74, 144, 226, 0.1);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0.5rem 0;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.7;
+        }
+
+        /* Card */
+        .card {
+            background: var(--card-dark);
+            border-radius: 15px;
+            padding: 1.5rem;
+            box-shadow: var(--shadow);
+            margin-bottom: 2rem;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 2px solid rgba(74, 144, 226, 0.2);
+        }
+
+        .card-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+        }
+
+        .card-icon {
+            font-size: 1.5rem;
+        }
+
+        /* Chart Container */
+        .chart-container {
+            height: 400px;
+            position: relative;
+        }
+
+        /* History Table */
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .history-table thead {
+            background: linear-gradient(135deg, var(--primary-blue), #667eea);
+            color: white;
+        }
+
+        .history-table th,
+        .history-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .history-table tbody tr {
+            transition: var(--transition);
+        }
+
+        .history-table tbody tr:hover {
+            background: rgba(74, 144, 226, 0.1);
+        }
+
+        .duration-badge {
+            display: inline-block;
+            padding: 0.4rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .duration-short {
+            background: rgba(80, 200, 120, 0.2);
+            color: var(--primary-green);
+        }
+
+        .duration-medium {
+            background: rgba(255, 215, 0, 0.2);
+            color: #FFA500;
+        }
+
+        .duration-long {
+            background: rgba(255, 107, 107, 0.2);
+            color: var(--primary-red);
+        }
+
+        .voltage-drop {
+            font-weight: 600;
+            color: var(--primary-red);
+        }
+
+        .energy-value {
+            font-weight: 600;
+            color: var(--primary-purple);
+        }
+
+        /* Filter Controls */
+        .filter-controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            padding: 0.6rem 1.2rem;
+            border: 2px solid var(--primary-blue);
+            background: transparent;
+            color: var(--primary-blue);
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: var(--transition);
+        }
+
+        .filter-btn:hover,
+        .filter-btn.active {
+            background: var(--primary-blue);
+            color: white;
+        }
+
+        .export-btn {
+            padding: 0.6rem 1.5rem;
+            background: linear-gradient(135deg, var(--primary-green), #45B849);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: var(--transition);
+        }
+
+        .export-btn:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 15px rgba(80, 200, 120, 0.3);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            opacity: 0.6;
+        }
+
+        .empty-state i {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Loading Animation */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .header {
+                padding: 1rem;
+            }
+
+            .header-title h1 {
+                font-size: 1.2rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .filter-controls {
+                flex-direction: column;
+            }
+
+            .history-table {
+                font-size: 0.85rem;
+            }
+
+            .history-table th,
+            .history-table td {
+                padding: 0.6rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-left">
+            <div class="header-icon">
+                <i class="fas fa-history"></i>
+            </div>
+            <div class="header-title">
+                <h1>Power Cut History & Analytics</h1>
+                <div class="header-subtitle">Battery Usage & Drainage Analysis</div>
+            </div>
+        </div>
+        <div class="header-right">
+            <a href="dashboard.html" class="nav-link">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
+            </a>
+
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div class="container">
+        <!-- Statistics Grid -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon" style="color: var(--primary-red); background: rgba(255, 107, 107, 0.1);">
+                        <i class="fas fa-plug-circle-xmark"></i>
+                    </div>
+                </div>
+                <div class="stat-value" id="totalPowerCuts">0</div>
+                <div class="stat-label">Total Power Cuts</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon" style="color: var(--primary-yellow); background: rgba(255, 215, 0, 0.1);">
+                        <i class="fas fa-clock"></i>
+                    </div>
+                </div>
+                <div class="stat-value" id="totalDuration">0m</div>
+                <div class="stat-label">Total Downtime</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon" style="color: var(--primary-purple); background: rgba(157, 78, 221, 0.1);">
+                        <i class="fas fa-bolt"></i>
+                    </div>
+                </div>
+                <div class="stat-value" id="totalEnergy">0 mWh</div>
+                <div class="stat-label">Total Battery Usage</div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-header">
+                    <div class="stat-icon" style="color: var(--primary-blue); background: rgba(74, 144, 226, 0.1);">
+                        <i class="fas fa-battery-half"></i>
+                    </div>
+                </div>
+                <div class="stat-value" id="avgVoltageDrop">0 V</div>
+                <div class="stat-label">Avg Voltage Drop</div>
+            </div>
+        </div>
+
+        <!-- Voltage Drainage Chart -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    <i class="fas fa-chart-line card-icon" style="color: var(--primary-red);"></i>
+                    Battery Voltage Drainage Over Time
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="voltageChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Power Cuts Timeline Chart -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    <i class="fas fa-chart-bar card-icon" style="color: var(--primary-purple);"></i>
+                    Power Cut Duration Timeline
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="durationChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Energy Consumption Chart -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    <i class="fas fa-battery-three-quarters card-icon" style="color: var(--primary-blue);"></i>
+                    Battery Energy Consumption
+                </div>
+            </div>
+            <div class="chart-container">
+                <canvas id="energyChart"></canvas>
+            </div>
+        </div>
+
+        <!-- History Table -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">
+                    <i class="fas fa-table card-icon" style="color: var(--primary-green);"></i>
+                    Detailed Power Cut Log
+                </div>
+                <button class="export-btn" onclick="exportData()">
+                    <i class="fas fa-download"></i> Export CSV
+                </button>
+            </div>
+
+            <!-- Filter Controls -->
+            <div class="filter-controls">
+                <button class="filter-btn active" onclick="filterData('all')">All Events</button>
+                <button class="filter-btn" onclick="filterData('today')">Today</button>
+                <button class="filter-btn" onclick="filterData('week')">This Week</button>
+                <button class="filter-btn" onclick="filterData('month')">This Month</button>
+                <button class="filter-btn" onclick="clearHistory()">
+                    <i class="fas fa-trash"></i> Clear History
+                </button>
+            </div>
+
+            <div id="historyTableContainer">
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Date & Time</th>
+                            <th>Duration</th>
+                            <th>Start Voltage</th>
+                            <th>End Voltage</th>
+                            <th>Voltage Drop</th>
+                            <th>Energy Used</th>
+                        </tr>
+                    </thead>
+                    <tbody id="historyTableBody">
+                        <tr>
+                            <td colspan="7" class="empty-state">
+                                <i class="fas fa-database"></i>
+                                <p>No power cut events recorded yet</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // MQTT Configuration
+        const MQTT_BROKER = 'wss://broker.hivemq.com:8884/mqtt';
+        const HISTORY_TOPIC = 'esp32/history/powercut';
+
+        let mqttClient;
+        let powerCutHistory = [];
+        let voltageChart, durationChart, energyChart;
+
+        // Load history from localStorage
+        function loadHistory() {
+            const saved = localStorage.getItem('powerCutHistory');
+            if (saved) {
+                powerCutHistory = JSON.parse(saved);
+            }
+            updateDisplay();
+        }
+
+        // Save history to localStorage
+        function saveHistory() {
+            localStorage.setItem('powerCutHistory', JSON.stringify(powerCutHistory));
+        }
+
+        // Initialize Charts
+        function initCharts() {
+            // Voltage Drainage Chart
+            const voltageCtx = document.getElementById('voltageChart').getContext('2d');
+            voltageChart = new Chart(voltageCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Voltage Drop (V)',
+                        data: [],
+                        borderColor: 'rgb(255, 107, 107)',
+                        backgroundColor: 'rgba(255, 107, 107, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: true },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return 'Voltage Drop: ' + context.parsed.y.toFixed(2) + ' V';
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Voltage Drop (V)' }
+                        }
+                    }
+                }
+            });
+
+            // Duration Chart
+            const durationCtx = document.getElementById('durationChart').getContext('2d');
+            durationChart = new Chart(durationCtx, {
+                type: 'bar',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Duration (minutes)',
+                        data: [],
+                        backgroundColor: 'rgba(157, 78, 221, 0.7)',
+                        borderColor: 'rgb(157, 78, 221)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: true } },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Duration (minutes)' }
+                        }
+                    }
+                }
+            });
+
+            // Energy Chart
+            const energyCtx = document.getElementById('energyChart').getContext('2d');
+            energyChart = new Chart(energyCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Energy Consumed (mWh)',
+                        data: [],
+                        borderColor: 'rgb(74, 144, 226)',
+                        backgroundColor: 'rgba(74, 144, 226, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: true } },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Energy (mWh)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update all displays
+        function updateDisplay() {
+            updateStats();
+            updateCharts();
+            updateTable();
+        }
+
+        // Update statistics
+        function updateStats() {
+            const total = powerCutHistory.length;
+            const totalDurationMs = powerCutHistory.reduce((sum, event) => sum + event.duration, 0);
+            const totalDurationMin = Math.round(totalDurationMs / 60000);
+            const totalEnergyVal = powerCutHistory.reduce((sum, event) => sum + (event.energy || 0), 0);
+            const avgDrop = total > 0 ? powerCutHistory.reduce((sum, event) => sum + event.drop, 0) / total : 0;
+
+            document.getElementById('totalPowerCuts').textContent = total;
+            document.getElementById('totalDuration').textContent = totalDurationMin + 'm';
+            document.getElementById('totalEnergy').textContent = totalEnergyVal.toFixed(2) + ' mWh';
+            document.getElementById('avgVoltageDrop').textContent = avgDrop.toFixed(2) + ' V';
+        }
+
+        // Update charts
+        function updateCharts() {
+            if (!voltageChart || !durationChart || !energyChart) {
+                console.error('Charts not initialized');
+                return;
+            }
+
+            const last10 = powerCutHistory.slice(-10);
+            const labels = last10.map((e, i) => `Event ${powerCutHistory.length - 9 + i}`);
+
+            // Voltage Chart
+            voltageChart.data.labels = labels;
+            voltageChart.data.datasets[0].data = last10.map(e => e.drop);
+            voltageChart.update();
+
+            // Duration Chart
+            durationChart.data.labels = labels;
+            durationChart.data.datasets[0].data = last10.map(e => (e.duration / 60000).toFixed(2));
+            durationChart.update();
+
+            // Energy Chart
+            energyChart.data.labels = labels;
+            energyChart.data.datasets[0].data = last10.map(e => e.energy || 0);
+            energyChart.update();
+        }
+
+        // Update table
+        function updateTable() {
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = '';
+
+            if (powerCutHistory.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="empty-state">
+                            <i class="fas fa-database"></i>
+                            <p>No power cut events recorded yet</p>
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            powerCutHistory.slice().reverse().forEach((event, index) => {
+                const durationMin = (event.duration / 60000).toFixed(2);
+                const durationClass = durationMin < 1 ? 'duration-short' : durationMin < 5 ? 'duration-medium' : 'duration-long';
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${powerCutHistory.length - index}</td>
+                    <td>${event.timestamp}</td>
+                    <td><span class="duration-badge ${durationClass}">${durationMin} min</span></td>
+                    <td>${event.startV.toFixed(2)} V</td>
+                    <td>${event.endV.toFixed(2)} V</td>
+                    <td class="voltage-drop">-${event.drop.toFixed(2)} V</td>
+                    <td class="energy-value">${(event.energy || 0).toFixed(2)} mWh</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+
+
+        // Filter Data
+        function filterData(period) {
+            // Update active button
+            document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+
+            // Filter logic would go here
+            console.log('Filter by:', period);
+        }
+
+        // Clear History
+        function clearHistory() {
+            if (confirm('Are you sure you want to clear all history data?')) {
+                powerCutHistory = [];
+                saveHistory();
+                updateDisplay();
+            }
+        }
+
+        // Export to CSV
+        function exportData() {
+            if (powerCutHistory.length === 0) {
+                alert('No data to export');
+                return;
+            }
+
+            let csv = 'Event,Date Time,Duration (ms),Duration (min),Start Voltage (V),End Voltage (V),Voltage Drop (V),Energy (mWh)\n';
+            
+            powerCutHistory.forEach((event, index) => {
+                csv += `${index + 1},${event.timestamp},${event.duration},${(event.duration/60000).toFixed(2)},${event.startV},${event.endV},${event.drop},${event.energy || 0}\n`;
+            });
+
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'power_cut_history_' + new Date().toISOString().split('T')[0] + '.csv';
+            a.click();
+            window.URL.revokeObjectURL(url);
+        }
+
+        // MQTT Functions
+        function initMQTT() {
+            mqttClient = mqtt.connect(MQTT_BROKER, {
+                clientId: 'History_' + Math.random().toString(16).substr(2, 8),
+                clean: true,
+                reconnectPeriod: 1000
+            });
+
+            mqttClient.on('connect', function() {
+                console.log('Connected to MQTT broker');
+                // Subscribe to history topic
+                mqttClient.subscribe(HISTORY_TOPIC, (err) => {
+                    if (!err) console.log('Subscribed to history topic');
+                });
+                // Subscribe to voltage topics to keep dashboard data updated
+                mqttClient.subscribe('esp32/sensor/voltage', (err) => {
+                    if (!err) console.log('Subscribed to sensor voltage for background data');
+                });
+                mqttClient.subscribe('esp32/sensor2/voltage', (err) => {
+                    if (!err) console.log('Subscribed to sensor2 voltage for background data');
+                });
+            });
+
+            mqttClient.on('message', function(topic, message) {
+                if (topic === HISTORY_TOPIC) {
+                    try {
+                        const data = JSON.parse(message.toString());
+                        const event = {
+                            timestamp: new Date().toLocaleString(),
+                            duration: data.duration,
+                            startV: data.startV,
+                            endV: data.endV,
+                            drop: data.drop,
+                            energy: data.energy
+                        };
+                        
+                        powerCutHistory.push(event);
+                        saveHistory();
+                        updateDisplay();
+                        
+                        console.log('New power cut event recorded:', event);
+                    } catch (e) {
+                        console.error('Error parsing history data:', e);
+                    }
+                } else if (topic === 'esp32/sensor/voltage' || topic === 'esp32/sensor2/voltage') {
+                    // Store voltage data for dashboard in background
+                    storeDashboardData(topic, message.toString());
+                }
+            });
+        }
+        
+        // Store dashboard data while on history page
+        function storeDashboardData(topic, value) {
+            const saved = localStorage.getItem('dashboardChartData');
+            if (saved) {
+                try {
+                    const chartState = JSON.parse(saved);
+                    const voltage = parseFloat(value);
+                    const now = new Date().toLocaleTimeString();
+                    const dataIndex = chartState.dataPointIndex || 0;
+                    
+                    if (topic === 'esp32/sensor/voltage') {
+                        // Update channel 1
+                        if (dataIndex < 60) {
+                            chartState.channel1Labels[dataIndex] = now;
+                            chartState.channel1Data[dataIndex] = voltage;
+                        } else {
+                            chartState.channel1Labels.shift();
+                            chartState.channel1Labels.push(now);
+                            chartState.channel1Data.shift();
+                            chartState.channel1Data.push(voltage);
+                        }
+                    } else if (topic === 'esp32/sensor2/voltage') {
+                        // Update channel 2
+                        if (dataIndex < 60) {
+                            chartState.channel2Labels[dataIndex] = now;
+                            chartState.channel2Data[dataIndex] = voltage;
+                        } else {
+                            chartState.channel2Labels.shift();
+                            chartState.channel2Labels.push(now);
+                            chartState.channel2Data.shift();
+                            chartState.channel2Data.push(voltage);
+                        }
+                    }
+                    
+                    // Update index if both channels received data at this index
+                    if (topic === 'esp32/sensor2/voltage' && dataIndex < 60) {
+                        chartState.dataPointIndex = dataIndex + 1;
+                    }
+                    
+                    chartState.timestamp = Date.now();
+                    localStorage.setItem('dashboardChartData', JSON.stringify(chartState));
+                } catch (e) {
+                    console.error('Error storing dashboard data:', e);
+                }
+            }
+        }
+
+        // Initialize on load
+        window.addEventListener('load', function() {
+            initCharts();
+            loadHistory();
+            initMQTT();
+        });
+    </script>
+</body>
+</html>

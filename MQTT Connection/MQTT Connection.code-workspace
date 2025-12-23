@@ -1,0 +1,12 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"name": "Mqtt connection",
+			"path": "../../../../Documents/PlatformIO/Projects/Mqtt connection"
+		}
+	],
+	"settings": {}
+}
