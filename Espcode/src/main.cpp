@@ -13,8 +13,8 @@
 #define INTENSITY_B1_PIN 33  
 #define INTENSITY_B2_PIN 35  
 
-const char* ssid = "Chamix";
-const char* password = "12345678";
+const char* ssid = "Dialog 4G 858";
+const char* password = "04588A9D";
 const char* mqtt_broker = "broker.hivemq.com";
 const int mqtt_port = 1883;
 
@@ -49,7 +49,7 @@ PubSubClient mqtt_client(espClient);
 INA3221 INA(0x40);
 
 bool powerCutDetected = false;
-const float POWER_CUT_THRESHOLD = 9.0;
+const float POWER_CUT_THRESHOLD = 1.0;
 bool emergencyModeActive = false;
 unsigned long gpio14ActivationTime = 0;
 const unsigned long GPIO14_DELAY = 200;
